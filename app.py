@@ -59,42 +59,105 @@ def build_html():
   <link rel="icon" type="image/png" href="{favicon_32}">
   <link rel="apple-touch-icon" sizes="180x180" href="{app_icon}">
   <link rel="icon" type="image/png" sizes="192x192" href="{chrome_192}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Kannada:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    /* ── Sanchaya design tokens (matches fonts.sanchaya.net) ── */
     :root {{
-      --primary: #4361ee; --primary-dk: #3f37c9; --navy: #1a1a2e;
-      --bg: #f8f9fa; --card: #fff; --text: #4a4a68; --border: #e0e0e0;
-      --green: #2ecc71; --green-dk: #27ae60; --red: #e74c3c;
-      --shadow: 0 4px 20px rgba(0,0,0,.08);
+      --primary:     #4361ee;
+      --primary-dk:  #3f37c9;
+      --primary-grad: linear-gradient(135deg, #4361ee 0%, #3f37c9 100%);
+      --text-color1: #1a1a2e;
+      --text-color3: #4361ee;
+      --span-color:  #4a4a68;
+      --bg-color:    #f8f9fa;
+      --card-bg:     #ffffff;
+      --border:      #e0e0e0;
+      --card-shadow: 0 4px 20px rgba(0,0,0,.08);
+      --card-shadow-hover: 0 8px 30px rgba(67,97,238,.15);
+      --hover-color: rgba(67,97,238,.08);
+      --green:  #2ecc71; --green-dk: #27ae60;
+      --red:    #e74c3c;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Noto Sans Kannada', 'Noto Sans', -apple-system, sans-serif;
-            background: var(--bg); color: var(--text);
-            min-height: 100vh; display: flex; flex-direction: column; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Kannada', sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color1);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }}
 
-    /* ── NAV ── */
-    nav {{ background: var(--navy); height: 56px; padding: 0 24px;
-           display: flex; align-items: center; gap: 12px;
-           box-shadow: 0 2px 8px rgba(0,0,0,.2); }}
-    nav a {{ display: flex; align-items: center; gap: 10px; text-decoration: none; }}
-    .nav-logo {{ height: 32px; width: 32px; border-radius: 6px; }}
-    .brand-name {{ color: #fff; font-size: 18px; font-weight: 600; letter-spacing: .3px; }}
-    .brand-sub  {{ color: rgba(255,255,255,.4); font-size: 13px; margin-left: 4px; }}
-    .nav-spacer {{ flex: 1; }}
+    /* ── NAV  (matches sanchaya.net: white bg, centred logo, 80px tall) ── */
+    nav {{
+      width: 100%;
+      min-height: 80px;
+      background: var(--card-bg);
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      position: relative;
+    }}
+    .center-nav {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }}
+    /* width:auto so the 400×109 landscape logo isn't squashed */
+    .nav-logo {{ height: 40px; width: auto; display: block; }}
+    .nav-tagline {{
+      font-size: 13px;
+      color: var(--span-color);
+      font-weight: 500;
+      font-family: 'Noto Sans Kannada', sans-serif;
+    }}
+    .nav-right {{
+      position: absolute;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }}
+    .nav-link {{
+      font-size: 13px;
+      color: var(--span-color);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background .2s, color .2s;
+    }}
+    .nav-link:hover {{ background: var(--hover-color); color: var(--primary); }}
 
     /* ── LAYOUT ── */
-    main {{ flex: 1; display: flex; justify-content: center; padding: 36px 16px; }}
-    .card {{ background: var(--card); border-radius: 14px; box-shadow: var(--shadow);
-             width: 100%; max-width: 720px; overflow: hidden; }}
+    main {{ flex: 1; display: flex; justify-content: center; padding: 32px 16px; }}
+    .card {{
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: var(--card-shadow);
+      width: 100%;
+      max-width: 720px;
+      overflow: hidden;
+      transition: box-shadow .2s;
+    }}
+    .card:hover {{ box-shadow: var(--card-shadow-hover); }}
 
     /* ── TABS ── */
     .tabs {{ display: flex; border-bottom: 1px solid var(--border); }}
-    .tab {{ flex: 1; padding: 14px; text-align: center; cursor: pointer; font-size: 15px;
-            font-weight: 500; color: var(--text); border: none; background: none;
-            font-family: inherit; transition: all .2s; }}
-    .tab.active {{ color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -1px; }}
-    .tab:hover:not(.active) {{ background: rgba(67,97,238,.04); }}
+    .tab {{
+      flex: 1; padding: 14px; text-align: center; cursor: pointer; font-size: 15px;
+      font-weight: 500; color: var(--span-color); border: none; background: none;
+      font-family: inherit; transition: background .2s, color .2s;
+    }}
+    .tab.active {{
+      color: var(--primary);
+      border-bottom: 2px solid var(--primary);
+      margin-bottom: -1px;
+    }}
+    .tab:hover:not(.active) {{ background: var(--hover-color); color: var(--primary); }}
     .panel {{ display: none; padding: 28px 28px 24px; }}
     .panel.active {{ display: block; }}
 
@@ -126,15 +189,25 @@ def build_html():
     }}
 
     /* ── TIMELINE ── */
-    .timeline-box {{ background: #f0f2ff; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }}
+    .timeline-box {{
+      background: var(--bg-color);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+    }}
     .timeline-row {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
-    .tl-label {{ font-size: 12px; font-weight: 600; color: var(--primary);
-                 text-transform: uppercase; letter-spacing: .4px; }}
+    .tl-label {{
+      font-size: 11px; font-weight: 600; color: var(--primary);
+      text-transform: uppercase; letter-spacing: .6px;
+    }}
     .tl-counters {{ display: flex; gap: 20px; }}
     .tl-counter {{ text-align: center; }}
-    .tl-counter .val {{ font-size: 20px; font-weight: 700; color: var(--navy);
-                        font-variant-numeric: tabular-nums; }}
-    .tl-counter .lbl {{ font-size: 11px; color: #aaa; margin-top: 1px; }}
+    .tl-counter .val {{
+      font-size: 20px; font-weight: 700; color: var(--text-color1);
+      font-variant-numeric: tabular-nums;
+    }}
+    .tl-counter .lbl {{ font-size: 11px; color: var(--span-color); margin-top: 1px; }}
     .tl-bar-wrap {{ position: relative; height: 10px; background: #dde1f9;
                     border-radius: 5px; overflow: hidden; }}
     .tl-bar-recorded {{ position: absolute; height: 100%; background: rgba(67,97,238,.25);
@@ -211,17 +284,27 @@ def build_html():
     .status .err {{ color: var(--red); }}
     .result-upload {{ display: none; margin-top: 22px; }}
 
-    /* ── FOOTER ── */
+    /* ── FOOTER (light, matching sanchaya.net) ── */
     footer {{
-      background: var(--navy); color: rgba(255,255,255,.45);
-      text-align: center; padding: 20px 16px;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      color: var(--span-color);
+      text-align: center;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
     }}
-    .footer-logo {{ height: 22px; opacity: .8; }}
-    .footer-links {{ display: flex; gap: 20px; }}
-    .footer-links a {{ color: rgba(255,255,255,.65); text-decoration: none; font-size: 13px; }}
-    .footer-links a:hover {{ color: #fff; }}
-    .footer-copy {{ font-size: 12px; color: rgba(255,255,255,.3); }}
+    /* sanchaya_logo is 450×451 (square) — show at 36px height */
+    .footer-logo {{ height: 36px; width: auto; opacity: .85; }}
+    .footer-links {{ display: flex; gap: 24px; }}
+    .footer-links a {{
+      color: var(--span-color); text-decoration: none; font-size: 13px;
+      transition: color .2s;
+    }}
+    .footer-links a:hover {{ color: var(--primary); }}
+    .footer-copy {{ font-size: 12px; color: #bbb; }}
 
     @media (max-width: 480px) {{
       .panel {{ padding: 20px 16px; }}
@@ -233,12 +316,16 @@ def build_html():
 
 <!-- ── Navbar ── -->
 <nav>
-  <a href="https://sanchaya.org" target="_blank">
-    <img class="nav-logo" src="{app_icon}" alt="ದನಿ ಕನ್ನಡ">
-    <span class="brand-name">ದನಿ ಕನ್ನಡ</span>
-  </a>
-  <span class="brand-sub">/ ಧ್ವನಿ → ಪಠ್ಯ</span>
-  <span class="nav-spacer"></span>
+  <div class="center-nav">
+    <a href="https://sanchaya.org" target="_blank">
+      <img class="nav-logo" src="{app_icon}" alt="ದನಿ ಕನ್ನಡ">
+    </a>
+    <span class="nav-tagline">ಧ್ವನಿ → ಕನ್ನಡ ಪಠ್ಯ</span>
+  </div>
+  <div class="nav-right">
+    <a class="nav-link" href="https://sanchaya.org" target="_blank">ಸಂಚಯ</a>
+    <a class="nav-link" href="https://sanchifoundation.org" target="_blank">ಸಂಚಿ ಫೌಂಡೇಶನ್</a>
+  </div>
 </nav>
 
 <main>
@@ -726,7 +813,7 @@ def main():
     print(f"Loading Whisper model '{args.model}'...")
     model = whisper.load_model(args.model)
     print(f"Ready → http://localhost:{args.port}\n")
-    app.run(host=args.host, port=args.port, debug=False)
+    app.run(host=args.host, port=args.port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":
