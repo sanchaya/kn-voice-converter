@@ -1,0 +1,16 @@
+# Kannada Speech-to-Text — Python dependencies
+# Install: pip install -r requirements.txt
+
+# Core: Whisper ASR
+openai-whisper>=20231117
+
+# Required by Whisper
+torch>=2.0.0
+numpy>=1.24.0
+tqdm>=4.64.0
+
+# Audio processing (ffmpeg Python wrapper)
+ffmpeg-python>=0.2.0
+
+# Web server (only needed for app.py)
+flask>=3.0.0
