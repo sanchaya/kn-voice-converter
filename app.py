@@ -145,6 +145,7 @@ def build_html():
     }}
     .center-nav {{ display: flex; flex-direction: column; align-items: center; gap: 4px; }}
     .nav-logo    {{ height: 40px; width: auto; display: block; }}
+    .nav-brand {{ font-size: 17px; font-weight: 700; color: var(--text-color1); letter-spacing: .02em; }}
     .nav-tagline {{ font-size: 13px; color: var(--span-color); letter-spacing: .04em; }}
     .nav-right   {{
       position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
@@ -258,6 +259,7 @@ def build_html():
 <nav>
   <div class="center-nav">
     <a href="/"><img class="nav-logo" src="{app_icon}" alt="ನುಡಿಯಕ್ಷರ"></a>
+    <span class="nav-brand">ನುಡಿಯಕ್ಷರ</span>
     <span class="nav-tagline">ಧ್ವನಿ → ಕನ್ನಡ ಪಠ್ಯ</span>
   </div>
   <div class="nav-right">
