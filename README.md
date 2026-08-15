@@ -1,6 +1,6 @@
-# ದನಿ ಕನ್ನಡ — Kannada Speech-to-Text
+# ನುಡಿಯಕ್ಷರ — Kannada Speech-to-Text
 
-**ದನಿ ಕನ್ನಡ** (Dani Kannada) converts spoken Kannada to Unicode Kannada text. Built by [Sanchaya](https://sanchaya.org) and [Sanchi Foundation](https://sanchifoundation.org) as a free, open-source tool for Kannada language preservation and research.
+**ನುಡಿಯಕ್ಷರ** (Nudiyakshara) converts spoken Kannada to Unicode Kannada text. Built by [Sanchaya](https://sanchaya.org) and [Sanchi Foundation](https://sanchifoundation.org) as a free, open-source tool for Kannada language preservation and research.
 
 🌐 **Live demo:** [dani.sanchaya.net](https://dani.sanchaya.net)
 
