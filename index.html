@@ -347,11 +347,11 @@ async function startRec(){
   document.getElementById('micHint').textContent='ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಕ್ಲಿಕ್ ಮಾಡಿ';
   setStatus('');
   // Waveform is optional — don't block speech if getUserMedia fails (common on mobile HTTP)
+  startRecognition();
   try{
     micStream=await navigator.mediaDevices.getUserMedia({audio:true});
     startWaveform(micStream);
   }catch(e){micStream=null;}
-  startRecognition();
 }
 
 function startRecognition(){
