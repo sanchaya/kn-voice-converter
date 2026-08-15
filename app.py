@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ದನಿ ಕನ್ನಡ — Kannada Speech-to-Text Server
+ನುಡಿಯಕ್ಷರ — Kannada Speech-to-Text Server
   Live mic  → Web Speech API (browser-native, kn-IN, no server needed)
   File upload → server-side Whisper transcription (mlx / api / local)
 
@@ -111,7 +111,7 @@ def build_html():
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ದನಿ ಕನ್ನಡ — ಧ್ವನಿ ಪಠ್ಯ</title>
+  <title>ನುಡಿಯಕ್ಷರ — ಧ್ವನಿ ಪಠ್ಯ</title>
   <link rel="icon" type="image/png" href="{favicon_32}">
   <link rel="apple-touch-icon" href="{app_icon}">
   <link rel="icon" type="image/png" sizes="192x192" href="{chrome_192}">
@@ -257,7 +257,7 @@ def build_html():
 
 <nav>
   <div class="center-nav">
-    <a href="/"><img class="nav-logo" src="{app_icon}" alt="ದನಿ ಕನ್ನಡ"></a>
+    <a href="/"><img class="nav-logo" src="{app_icon}" alt="ನುಡಿಯಕ್ಷರ"></a>
     <span class="nav-tagline">ಧ್ವನಿ → ಕನ್ನಡ ಪಠ್ಯ</span>
   </div>
   <div class="nav-right">
@@ -575,7 +575,7 @@ def main():
     global model
 
     parser = argparse.ArgumentParser(
-        description="ದನಿ ಕನ್ನಡ — Kannada Speech-to-Text Server"
+        description="ನುಡಿಯಕ್ಷರ — Kannada Speech-to-Text Server"
     )
     parser.add_argument("--port",  type=int, default=8998)
     parser.add_argument("--host",  default="0.0.0.0")

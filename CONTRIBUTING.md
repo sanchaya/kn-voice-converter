@@ -1,4 +1,4 @@
-# Contributing to ದನಿ ಕನ್ನಡ
+# Contributing to ನುಡಿಯಕ್ಷರ
 
 Thank you for your interest in contributing to Kannada language technology.
 
