@@ -158,7 +158,7 @@ kannada-speech-to-text/
 
 ಸಂಚಯದ ಕೆಲಸಗಳಿಗೆ ಸಮುದಾಯದ ಕಾಣಿಕೆಗಳೇ ಬಲ.
 
-File upload requires a server running Whisper (~₹3,000–5,000/month). Community funding will make this available to everyone for free.
+File upload requires dedicated server hardware or GPU infrastructure — either a GPU cloud instance or a self-hosted machine. The compute cost is significant. Community funding will help Sanchaya invest in the right hardware and make this feature available to everyone for free.
 
 👉 [sanchaya.org/support-us](https://sanchaya.org/support-us/)
 
