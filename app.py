@@ -33,6 +33,55 @@ sock       = Sock(app) if HAS_SOCK else None
 model      = None
 model_lock = threading.Lock()
 
+# ── Transcription backend ─────────────────────────────────────────────────────
+# BACKEND = "mlx"   → mlx-whisper  (Apple Silicon M1-M4, uses Metal GPU — recommended)
+# BACKEND = "api"   → OpenAI Whisper API (cloud, requires OPENAI_API_KEY)
+# BACKEND = "local" → openai-whisper on CPU (slow, may freeze Mac)
+BACKEND    = "local"
+api_client = None
+mlx_model_repo = None   # HuggingFace repo string for mlx-whisper
+
+KANNADA_PROMPT = "ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಮಾತನಾಡಿದ ಪಠ್ಯ:"
+
+
+def do_transcribe(audio_path: str) -> tuple[str, float]:
+    """Transcribe audio file. Returns (text, duration_seconds)."""
+    if BACKEND == "mlx":
+        import mlx_whisper
+        with model_lock:   # prevent concurrent Metal GPU access
+            result = mlx_whisper.transcribe(
+                audio_path,
+                path_or_hf_repo=mlx_model_repo,
+                language="kn",
+                initial_prompt=KANNADA_PROMPT,
+            )
+        text = result["text"].strip()
+        dur  = result["segments"][-1]["end"] if result.get("segments") else 0
+        return text, dur
+
+    elif BACKEND == "api":
+        with open(audio_path, "rb") as f:
+            resp = api_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                language="kn",
+                prompt=KANNADA_PROMPT,
+                response_format="verbose_json",
+            )
+        text = resp.text.strip()
+        dur  = getattr(resp, "duration", 0) or 0
+        return text, dur
+
+    else:  # local
+        with model_lock:
+            result = model.transcribe(
+                audio_path, language="kn", task="transcribe",
+                fp16=False, initial_prompt=KANNADA_PROMPT,
+            )
+        text = result["text"].strip()
+        dur  = result["segments"][-1]["end"] if result["segments"] else 0
+        return text, dur
+
 
 # ── Load branding assets ──────────────────────────────────────────────────────
 def load_assets():
@@ -233,14 +282,38 @@ def build_html():
     .transcript-label {{ font-size: 12px; font-weight: 600; color: var(--primary);
                           text-transform: uppercase; letter-spacing: .4px; margin-bottom: 8px; }}
     .transcript-box {{
-      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-      padding: 16px; font-size: 18px; line-height: 1.9; min-height: 100px;
-      white-space: pre-wrap; color: var(--navy);
+      background: var(--bg-color); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 16px; font-size: 18px; line-height: 1.9; min-height: 120px;
+      color: var(--text-color1);
       user-select: text; -webkit-user-select: text;
-      max-height: 320px; overflow-y: auto;
+      max-height: 360px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 2px;
     }}
-    .chunk-new  {{ color: var(--primary); transition: color 1.5s; }}
-    .chunk-done {{ color: var(--navy); }}
+    .transcript-row {{
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 3px 0; border-bottom: 1px solid transparent;
+      transition: color 1.5s;
+    }}
+    .transcript-row.chunk-new {{ color: var(--primary); }}
+    .transcript-row.chunk-new .ts {{ color: var(--primary); opacity: .9; }}
+    .ts {{
+      font-size: 11px; color: #aaa; font-variant-numeric: tabular-nums;
+      white-space: nowrap; flex-shrink: 0; padding-top: 3px;
+      font-family: ui-monospace, monospace;
+    }}
+    .chunk-text {{ flex: 1; }}
+    .session-sep {{
+      font-size: 11px; color: #bbb; text-align: center;
+      padding: 8px 0 4px; letter-spacing: .04em;
+    }}
+    .pending-dots {{
+      color: var(--primary); opacity: .5;
+      animation: blink .9s step-start infinite;
+    }}
+    @keyframes blink {{ 0%,100%{{opacity:.5}} 50%{{opacity:1}} }}
+    /* interim row — live partial result while user is still speaking */
+    .interim-row {{ opacity: .55; font-style: italic; }}
+    .interim-text {{ color: var(--span-color); }}
 
     /* ── UPLOAD ── */
     .upload-zone {{
@@ -487,7 +560,7 @@ function drawWave() {{
 
 // ── Timeline state ────────────────────────────────────────────────────────────
 let recordedSec = 0, transcribedSec = 0, processingNow = false;
-const CHUNK_SECS = 8;
+const CHUNK_SECS = 5;   // shorter = faster feedback on M4
 let recordTimer = null;
 
 function updateTimeline() {{
@@ -512,36 +585,26 @@ function updateTimeline() {{
   }}
 }}
 
-// ── WebSocket / Recording ─────────────────────────────────────────────────────
-let ws = null, micStream = null, mediaRecorder = null;
-let chunkIdx = 0, isRecording = false;
-let chunkTimer = null, audioChunks = [];
+// ── Web Speech API recording ──────────────────────────────────────────────────
+let recognition  = null;
+let micStream    = null;
+let isRecording  = false;
+let interimRow   = null;   // live partial-result row
 
-function openWS() {{
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(proto + '://' + location.host + '/ws/transcribe');
-  ws.onmessage = e => {{
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'transcript' && msg.text) {{
-      appendLive(msg.text);
-      transcribedSec += (msg.chunk_duration || CHUNK_SECS);
-      processingNow = false;
-      updateTimeline();
-      setChunkStatus('');
-    }} else if (msg.type === 'error') {{
-      setChunkStatus('⚠️ ' + msg.message);
-      processingNow = false;
-      updateTimeline();
-    }}
-  }};
-  ws.onerror = () => setChunkStatus('WebSocket ದೋಷ — ಸರ್ವರ್ ಚಾಲನೆಯಲ್ಲಿದೆಯೇ?');
-}}
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 async function toggleRecording() {{
   isRecording ? stopRec() : startRec();
 }}
 
 async function startRec() {{
+  if (!SR) {{
+    setMicStatus('ಬ್ರೌಸರ್ ಬೆಂಬಲವಿಲ್ಲ',
+      'Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox Speech API ಬೆಂಬಲಿಸುವುದಿಲ್ಲ');
+    return;
+  }}
+
+  // Get mic stream for waveform visualisation only
   try {{
     micStream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
   }} catch(e) {{
@@ -550,80 +613,125 @@ async function startRec() {{
   }}
 
   isRecording = true;
-  chunkIdx = 0; recordedSec = 0; transcribedSec = 0; processingNow = false;
-  document.getElementById('liveTranscript').innerHTML = '';
+  recordedSec = 0; transcribedSec = 0;
+  appendSessionMarker();
   updateTimeline();
-
-  openWS();
   startWaveform(micStream);
 
   document.getElementById('micBtn').classList.add('recording');
   document.getElementById('micBtn').textContent = '⏹️';
   setMicStatus('ರೆಕಾರ್ಡ್ ನಡೆಯುತ್ತಿದೆ…', 'ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಕ್ಲಿಕ್ ಮಾಡಿ');
-
   recordTimer = setInterval(() => {{ recordedSec++; updateTimeline(); }}, 1000);
-  beginChunk();
-  chunkTimer = setInterval(() => rotateChunk(), CHUNK_SECS * 1000);
+
+  // Start Web Speech API
+  recognition = new SR();
+  recognition.lang = 'kn-IN';
+  recognition.continuous      = true;
+  recognition.interimResults  = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event) => {{
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {{
+      const r = event.results[i];
+      if (r.isFinal) {{
+        const text = r[0].transcript.trim();
+        if (text) {{
+          // Remove the interim row, add a permanent row
+          if (interimRow) {{ interimRow.remove(); interimRow = null; }}
+          appendLive(text);
+          transcribedSec = recordedSec;
+          updateTimeline();
+        }}
+      }} else {{
+        interim += r[0].transcript;
+      }}
+    }}
+    // Update the live interim row
+    if (interim) {{
+      const box = document.getElementById('liveTranscript');
+      if (!interimRow) {{
+        interimRow = document.createElement('div');
+        interimRow.className = 'transcript-row interim-row';
+        box.appendChild(interimRow);
+      }}
+      interimRow.innerHTML =
+        '<span class="ts">' + fmtClock() + '</span>'
+        + '<span class="chunk-text interim-text">' + interim + '</span>';
+      box.scrollTop = box.scrollHeight;
+    }}
+  }};
+
+  recognition.onerror = (e) => {{
+    if (e.error === 'no-speech') return;   // normal silence — ignore
+    if (e.error === 'aborted')  return;   // we stopped it — ignore
+    setMicStatus('ದೋಷ: ' + e.error, 'ಪುಟ ರಿಫ್ರೆಶ್ ಮಾಡಿ ಮತ್ತು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ');
+  }};
+
+  recognition.onend = () => {{
+    // Auto-restart while still recording (browser stops after silence)
+    if (isRecording) recognition.start();
+  }};
+
+  recognition.start();
+  setChunkStatus('');
 }}
 
 function stopRec() {{
   isRecording = false;
-  clearInterval(chunkTimer);
   clearInterval(recordTimer);
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (recognition) {{ recognition.abort(); recognition = null; }}
+  if (micStream)   micStream.getTracks().forEach(t => t.stop());
+  if (interimRow)  {{ interimRow.remove(); interimRow = null; }}
   stopWaveform();
   document.getElementById('micBtn').classList.remove('recording');
   document.getElementById('micBtn').textContent = '🎙️';
   setMicStatus('ರೆಕಾರ್ಡ್ ಮಾಡಲು ಕ್ಲಿಕ್ ಮಾಡಿ', 'ರೆಕಾರ್ಡಿಂಗ್ ನಿಲ್ಲಿಸಲಾಗಿದೆ');
+  setChunkStatus('');
 }}
 
-function beginChunk() {{
-  audioChunks = [];
-  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-    ? 'audio/webm;codecs=opus' : 'audio/webm';
-  mediaRecorder = new MediaRecorder(micStream, {{ mimeType: mime }});
-  mediaRecorder.ondataavailable = e => {{ if (e.data.size > 0) audioChunks.push(e.data); }};
-  mediaRecorder.onstop = () => sendChunk(audioChunks, chunkIdx++);
-  mediaRecorder.start();
+function fmtClock() {{
+  const n = new Date();
+  return n.toLocaleTimeString('kn-IN', {{ hour: '2-digit', minute: '2-digit', second: '2-digit' }});
 }}
 
-function rotateChunk() {{
-  if (mediaRecorder && mediaRecorder.state === 'recording') {{
-    mediaRecorder.stop();           // triggers onstop → sendChunk
-    if (isRecording) beginChunk();  // immediately start next chunk
-  }}
-}}
-
-function sendChunk(chunks, idx) {{
-  if (!chunks.length || !ws || ws.readyState !== WebSocket.OPEN) return;
-  const blob = new Blob(chunks, {{ type: 'audio/webm' }});
-  processingNow = true;
-  updateTimeline();
-  setChunkStatus('ಭಾಗ ' + (idx + 1) + ' ಪ್ರಕ್ರಿಯೆ…');
-  blob.arrayBuffer().then(buf => {{
-    // Encode large buffer safely (avoids call-stack overflow on big chunks)
-    const bytes = new Uint8Array(buf);
-    let b64 = '';
-    const STEP = 8192;
-    for (let i = 0; i < bytes.length; i += STEP)
-      b64 += String.fromCharCode(...bytes.subarray(i, i + STEP));
-    ws.send(JSON.stringify({{
-      type: 'audio_chunk',
-      chunk_index: idx,
-      chunk_duration: CHUNK_SECS,
-      data: btoa(b64)
-    }}));
-  }});
+function appendSessionMarker() {{
+  const box = document.getElementById('liveTranscript');
+  // Skip marker if box is empty (very first session)
+  if (!box.innerHTML.trim()) return;
+  const sep = document.createElement('div');
+  sep.className = 'session-sep';
+  sep.textContent = '── ಹೊಸ ರೆಕಾರ್ಡಿಂಗ್ ' + fmtClock() + ' ──';
+  box.appendChild(sep);
 }}
 
 function appendLive(text) {{
-  const box  = document.getElementById('liveTranscript');
-  const span = document.createElement('span');
-  span.className   = 'chunk-new';
-  span.textContent = (box.textContent ? ' ' : '') + text;
-  box.appendChild(span);
-  setTimeout(() => span.className = 'chunk-done', 1800);
+  const box = document.getElementById('liveTranscript');
+
+  // Promote the interim row to a final row, or create a fresh one
+  let row;
+  if (interimRow) {{
+    row = interimRow;
+    interimRow = null;
+    row.innerHTML = '';
+  }} else {{
+    row = document.createElement('div');
+    box.appendChild(row);
+  }}
+
+  row.className = 'transcript-row chunk-new';
+
+  const ts = document.createElement('span');
+  ts.className   = 'ts';
+  ts.textContent = fmtClock();
+
+  const txt = document.createElement('span');
+  txt.className   = 'chunk-text';
+  txt.textContent = text;
+
+  row.appendChild(ts);
+  row.appendChild(txt);
+  setTimeout(() => row.classList.remove('chunk-new'), 1800);
   box.scrollTop = box.scrollHeight;
 }}
 
@@ -635,7 +743,12 @@ function setChunkStatus(msg) {{
   const el = document.getElementById('chunkStatus');
   el.innerHTML = msg ? '<div class="dot-spin"></div>' + msg : '';
 }}
-function copyLive()  {{ navigator.clipboard.writeText(document.getElementById('liveTranscript').innerText); }}
+function copyLive() {{
+  // Copy only the Kannada text, not the timestamps
+  const rows = document.querySelectorAll('#liveTranscript .chunk-text');
+  const text = Array.from(rows).map(r => r.textContent).join(' ').trim();
+  navigator.clipboard.writeText(text);
+}}
 function clearLive() {{
   document.getElementById('liveTranscript').innerHTML = '';
   recordedSec = 0; transcribedSec = 0; updateTimeline();
@@ -727,11 +840,7 @@ def transcribe():
         tmp_path = tmp.name
     try:
         t0 = time.time()
-        with model_lock:
-            result = model.transcribe(tmp_path, language="kn",
-                                      task="transcribe", fp16=False)
-        text     = result["text"].strip()
-        duration = result["segments"][-1]["end"] if result["segments"] else 0
+        text, duration = do_transcribe(tmp_path)
         return jsonify({
             "text": text, "characters": len(text),
             "duration_seconds": duration,
@@ -761,28 +870,31 @@ if HAS_SOCK:
             audio_bytes = base64.b64decode(msg["data"])
             chunk_idx   = msg.get("chunk_index", 0)
             chunk_dur   = msg.get("chunk_duration", CHUNK_SECS)
+            print(f"[WS] chunk {chunk_idx+1} received — {len(audio_bytes):,} bytes", flush=True)
 
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as f:
                 f.write(audio_bytes)
                 tmp_path = f.name
             try:
-                with model_lock:
-                    result = model.transcribe(tmp_path, language="kn",
-                                              task="transcribe", fp16=False)
-                text       = result["text"].strip()
-                actual_dur = result["segments"][-1]["end"] \
-                             if result["segments"] else chunk_dur
+                print(f"[WS] chunk {chunk_idx+1} → transcribing…", flush=True)
+                t0 = time.time()
+                text, actual_dur = do_transcribe(tmp_path)
+                if not actual_dur:
+                    actual_dur = chunk_dur
+                elapsed = round(time.time() - t0, 1)
+                print(f"[WS] chunk {chunk_idx+1} done in {elapsed}s → '{text[:60]}'", flush=True)
                 ws.send(json.dumps({
                     "type": "transcript", "text": text,
                     "chunk_index": chunk_idx, "chunk_duration": actual_dur,
                 }))
             except Exception as e:
+                print(f"[WS] chunk {chunk_idx+1} ERROR: {e}", flush=True)
                 ws.send(json.dumps({"type": "error", "message": str(e)}))
             finally:
                 os.unlink(tmp_path)
 
 
-CHUNK_SECS = 8   # must match JS constant
+CHUNK_SECS = 5   # must match JS constant
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -795,24 +907,102 @@ def main():
     parser.add_argument("--port",  type=int, default=8998)
     parser.add_argument("--host",  default="0.0.0.0")
     parser.add_argument(
-        "--model", default="medium",
-        choices=["tiny", "base", "small", "medium", "large", "large-v3"],
+        "--model", default="turbo",
+        choices=["tiny", "base", "small", "medium", "large", "large-v3", "turbo"],
+    )
+    parser.add_argument(
+        "--model-dir", default=None,
+        help="Directory to store/load Whisper model weights "
+             "(default: ~/.cache/whisper).",
+    )
+    parser.add_argument(
+        "--api-key", default=None,
+        help="OpenAI API key for cloud Whisper. "
+             "Can also be set via OPENAI_API_KEY env var.",
+    )
+    parser.add_argument(
+        "--mlx", action="store_true", default=True,
+        help="Use mlx-whisper (Apple Silicon Metal GPU). Default on M-series Macs.",
+    )
+    parser.add_argument(
+        "--no-mlx", dest="mlx", action="store_false",
+        help="Disable mlx-whisper and use CPU (not recommended on Apple Silicon).",
     )
     args = parser.parse_args()
 
     if not HAS_SOCK:
         print("WARNING: flask-sock not installed — live mic disabled.")
-        print("         Run: pip install flask-sock")
+        print("         Run: python3 -m pip install flask-sock")
 
-    try:
-        import whisper
-    except ImportError:
-        print("Error: openai-whisper not installed. Run: pip install openai-whisper")
-        sys.exit(1)
+    # ── Choose backend ────────────────────────────────────────────────────────
+    global BACKEND, api_client, model, mlx_model_repo
 
-    print(f"Loading Whisper model '{args.model}'...")
-    model = whisper.load_model(args.model)
-    print(f"Ready → http://localhost:{args.port}\n")
+    # Priority: mlx > api-key > local
+    if args.mlx:
+        try:
+            import mlx_whisper  # noqa: F401
+            # Map --model names to mlx-community HuggingFace repos
+            MLX_REPOS = {
+                "tiny":      "mlx-community/whisper-tiny-mlx",
+                "base":      "mlx-community/whisper-base-mlx",
+                "small":     "mlx-community/whisper-small-mlx",
+                "medium":    "mlx-community/whisper-medium-mlx",
+                "large":     "mlx-community/whisper-large-v3-mlx",
+                "large-v3":  "mlx-community/whisper-large-v3-mlx",
+                "turbo":     "mlx-community/whisper-large-v3-turbo",
+            }
+            mlx_model_repo = MLX_REPOS.get(args.model, "mlx-community/whisper-large-v3-mlx")
+            BACKEND = "mlx"
+            print(f"✓ mlx-whisper backend — Apple Silicon Metal GPU")
+            print(f"  Model: {mlx_model_repo}")
+            print(f"  (model downloads on first use, cached in ~/.cache/huggingface/)")
+        except ImportError:
+            print("mlx-whisper not installed. Installing now…")
+            os.system(f"{sys.executable} -m pip install mlx-whisper -q")
+            try:
+                import mlx_whisper  # noqa: F401
+                MLX_REPOS = {
+                    "tiny":      "mlx-community/whisper-tiny-mlx",
+                    "base":      "mlx-community/whisper-base-mlx",
+                    "small":     "mlx-community/whisper-small-mlx",
+                    "medium":    "mlx-community/whisper-medium-mlx",
+                    "large":     "mlx-community/whisper-large-v3-mlx",
+                    "large-v3":  "mlx-community/whisper-large-v3-mlx",
+                    "turbo":     "mlx-community/whisper-large-v3-turbo",
+                }
+                mlx_model_repo = MLX_REPOS.get(args.model, "mlx-community/whisper-large-v3-mlx")
+                BACKEND = "mlx"
+                print(f"✓ mlx-whisper installed and ready")
+            except ImportError:
+                print("WARNING: mlx-whisper install failed — falling back to local CPU mode")
+
+    if BACKEND == "local":
+        api_key = args.api_key or os.environ.get("OPENAI_API_KEY", "")
+        if api_key:
+            try:
+                from openai import OpenAI
+                api_client = OpenAI(api_key=api_key)
+                api_client.models.list()
+                BACKEND = "api"
+                print("✓ OpenAI Whisper API mode")
+            except Exception as e:
+                print(f"WARNING: OpenAI API failed ({e}) — falling back to local model")
+
+    if BACKEND == "local":
+        print("⚠️  Local CPU mode — may be slow and freeze the Mac")
+        try:
+            import whisper
+        except ImportError:
+            print("Error: run: python3 -m pip install openai-whisper")
+            sys.exit(1)
+        model_dir = args.model_dir
+        if model_dir:
+            Path(model_dir).mkdir(parents=True, exist_ok=True)
+        print(f"Loading Whisper '{args.model}' model…")
+        model = whisper.load_model(args.model, download_root=model_dir or None)
+        print("Model loaded.")
+
+    print(f"\nReady → http://localhost:{args.port}\n")
     app.run(host=args.host, port=args.port, debug=False, threaded=True)
 
 

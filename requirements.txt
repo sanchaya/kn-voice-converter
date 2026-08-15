@@ -1,10 +1,18 @@
 # ದನಿ ಕನ್ನಡ — Python dependencies
 # Install: pip install -r requirements.txt
 
-openai-whisper>=20231117
-torch>=2.0.0
-numpy>=1.24.0
-tqdm>=4.64.0
-ffmpeg-python>=0.2.0
+# Web server
 flask>=3.0.0
 flask-sock>=0.7.0
+
+# ── RECOMMENDED: Apple Silicon (M1/M2/M3/M4) ────────────────────────────────
+# Uses Metal GPU/Neural Engine — fast, accurate, no CPU load
+mlx-whisper>=0.4.0
+
+# ── ALTERNATIVE: OpenAI cloud API ───────────────────────────────────────────
+# openai>=1.0.0
+
+# ── FALLBACK: Local CPU (slow, not recommended) ──────────────────────────────
+# openai-whisper>=20231117
+# torch>=2.0.0
+# numpy>=1.24.0
