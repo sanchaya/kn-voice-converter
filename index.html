@@ -339,6 +339,7 @@ async function toggleRecording(){isRecording?stopRec():startRec();}
 
 async function startRec(){
   if(!SR){setStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true);return;}
+  if(/iPad|iPhone|iPod/.test(navigator.userAgent)){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);return;}
   isRecording=true;
   appendSessionMarker();
   document.getElementById('micBtn').classList.add('recording');
@@ -373,7 +374,7 @@ function startRecognition(){
       box.scrollTop=box.scrollHeight;
     }
   };
-  recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;setStatus('ದೋಷ: '+e.error,true);};
+  recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='service-not-allowed'){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}setStatus('ದೋಷ: '+e.error,true);};
   // Restart on end — use small delay to avoid rapid cycling on iOS Safari
   recognition.onend=()=>{if(isRecording)setTimeout(()=>{if(isRecording)startRecognition();},300);};
   try{recognition.start();}catch(e){/* already started */}
