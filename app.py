@@ -17,7 +17,7 @@ Endpoints:
 
 import argparse, base64, json, os, sys, tempfile, time, threading
 from pathlib import Path
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 try:
     from flask_sock import Sock
@@ -396,6 +396,8 @@ def build_html():
     <span class="nav-tagline">ಧ್ವನಿ → ಕನ್ನಡ ಪಠ್ಯ</span>
   </div>
   <div class="nav-right">
+    <a class="nav-link" href="/about">ನಮ್ಮ ಬಗ್ಗೆ</a>
+    <a class="nav-link" href="https://sanchaya.org/support-us/" target="_blank">ಬೆಂಬಲಿಸಿ</a>
     <a class="nav-link" href="https://sanchaya.org" target="_blank">ಸಂಚಯ</a>
     <a class="nav-link" href="https://sanchifoundation.org" target="_blank">ಸಂಚಿ ಫೌಂಡೇಶನ್</a>
   </div>
@@ -500,10 +502,12 @@ def build_html():
 <footer>
   <img class="footer-logo" src="{sanchaya_logo}" alt="Sanchaya">
   <div class="footer-links">
+    <a href="/about">ನಮ್ಮ ಬಗ್ಗೆ</a>
+    <a href="https://sanchaya.org/support-us/" target="_blank">ಬೆಂಬಲಿಸಿ</a>
     <a href="https://sanchaya.org"        target="_blank">ಸಂಚಯ</a>
     <a href="https://sanchifoundation.org" target="_blank">ಸಂಚಿ ಫೌಂಡೇಶನ್</a>
   </div>
-  <div class="footer-copy">© 2026 Sanchaya &amp; Sanchi Foundation</div>
+  <div class="footer-copy">© 2026 Sanchaya &amp; Sanchi Foundation · Creative Commons Attribution 4.0</div>
 </footer>
 
 <script>
@@ -825,6 +829,15 @@ def index():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "model_loaded": model is not None})
+
+
+@app.route("/about")
+def about():
+    here = Path(__file__).parent
+    about_file = here / "about.html"
+    if about_file.exists():
+        return send_from_directory(str(here), "about.html")
+    return "<h1>About page not found — run from the project directory.</h1>", 404
 
 
 @app.route("/transcribe", methods=["POST"])
