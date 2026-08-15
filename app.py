@@ -360,9 +360,9 @@ async function startRec(){{
   document.getElementById('micStatus').textContent='ರೆಕಾರ್ಡ್ ನಡೆಯುತ್ತಿದೆ…';
   document.getElementById('micHint').textContent='ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಕ್ಲಿಕ್ ಮಾಡಿ';
   setLiveStatus('');
+  startRecognition();
   try{{micStream=await navigator.mediaDevices.getUserMedia({{audio:true}});startWaveform(micStream);}}
   catch(e){{micStream=null;}}
-  startRecognition();
 }}
 function startRecognition(){{
   if(!isRecording)return;
