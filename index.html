@@ -170,6 +170,19 @@
       .appeal-card { padding: 24px 20px; }
       .appeal-title { font-size: 18px; }
     }
+
+    /* Mobile responsive */
+    @media (max-width: 520px) {
+      .card { padding: 20px 16px; }
+      .mic-btn { width: 60px; height: 60px; font-size: 24px; }
+      .mic-info h3 { font-size: 15px; }
+      .transcript-box { font-size: 16px; min-height: 120px; }
+      .appeal-card { padding: 24px 16px; }
+      .appeal-title { font-size: 17px; }
+      .appeal-features { gap: 6px; }
+      .appeal-feat { padding: 6px 10px; font-size: 12px; }
+      .btn-appeal-primary, .btn-appeal-secondary { padding: 12px 18px; font-size: 14px; }
+    }
   </style>
 </head>
 <body>
@@ -256,17 +269,21 @@
 </footer>
 
 <script>
+
 const wfCanvas = document.getElementById('waveCanvas');
 const wfCtx    = wfCanvas.getContext('2d');
 let analyser, waveAF;
+
 function startWaveform(stream) {
-  const ctx = new AudioContext(); analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
-  ctx.createMediaStreamSource(stream).connect(analyser);
-  wfCanvas.classList.add('active'); drawWave();
+  try {
+    const ctx = new AudioContext(); analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    wfCanvas.classList.add('active'); drawWave();
+  } catch(e) { /* waveform unavailable */ }
 }
 function stopWaveform() {
   if (waveAF) cancelAnimationFrame(waveAF);
-  wfCtx.clearRect(0,0,wfCanvas.width,wfCanvas.height);
+  if (wfCtx) wfCtx.clearRect(0,0,wfCanvas.width,wfCanvas.height);
   wfCanvas.classList.remove('active'); analyser = null;
 }
 function drawWave() {
@@ -299,65 +316,81 @@ function appendSessionMarker() {
 function appendLive(text) {
   const box=document.getElementById('liveTranscript');
   let row;
-  if(interimRow){ row=interimRow; interimRow=null; row.innerHTML=''; }
-  else { row=document.createElement('div'); box.appendChild(row); }
+  if(interimRow){row=interimRow;interimRow=null;row.innerHTML='';}
+  else{row=document.createElement('div');box.appendChild(row);}
   row.className='transcript-row chunk-new';
-  const ts=document.createElement('span'); ts.className='ts'; ts.textContent=fmtClock();
-  const txt=document.createElement('span'); txt.className='chunk-text'; txt.textContent=text;
-  row.appendChild(ts); row.appendChild(txt);
+  const ts=document.createElement('span');ts.className='ts';ts.textContent=fmtClock();
+  const txt=document.createElement('span');txt.className='chunk-text';txt.textContent=text;
+  row.appendChild(ts);row.appendChild(txt);
   setTimeout(()=>row.classList.remove('chunk-new'),1800);
   box.scrollTop=box.scrollHeight;
 }
 function copyLive() {
   const rows=document.querySelectorAll('#liveTranscript .chunk-text');
   const text=Array.from(rows).map(r=>r.textContent).join(' ').trim();
-  navigator.clipboard.writeText(text).then(()=>{setStatus('✓ ನಕಲಿಸಲಾಗಿದೆ'); setTimeout(()=>setStatus(''),2000);});
+  navigator.clipboard.writeText(text).then(()=>{setStatus('✓ ನಕಲಿಸಲಾಗಿದೆ');setTimeout(()=>setStatus(''),2000);});
 }
-function clearLive() { document.getElementById('liveTranscript').innerHTML=''; setStatus(''); }
+function clearLive(){document.getElementById('liveTranscript').innerHTML='';setStatus('');}
 
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let recognition=null,micStream=null,isRecording=false,interimRow=null;
-async function toggleRecording() { isRecording?stopRec():startRec(); }
-async function startRec() {
-  if(!SR){ setStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true); return; }
-  try{ micStream=await navigator.mediaDevices.getUserMedia({audio:true}); }
-  catch(e){ setStatus('ಮೈಕ್ ಅನುಮತಿ ಅಗತ್ಯ',true); return; }
-  isRecording=true; appendSessionMarker(); startWaveform(micStream);
+
+async function toggleRecording(){isRecording?stopRec():startRec();}
+
+async function startRec(){
+  if(!SR){setStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true);return;}
+  isRecording=true;
+  appendSessionMarker();
   document.getElementById('micBtn').classList.add('recording');
   document.getElementById('micBtn').textContent='⏹️';
   document.getElementById('micStatus').textContent='ರೆಕಾರ್ಡ್ ನಡೆಯುತ್ತಿದೆ…';
-  document.getElementById('micHint').textContent='ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಕ್ಲಿಕ್ ಮಾಡಿ'; setStatus('');
-  recognition=new SR(); recognition.lang='kn-IN'; recognition.continuous=true;
-  recognition.interimResults=true; recognition.maxAlternatives=1;
+  document.getElementById('micHint').textContent='ನಿಲ್ಲಿಸಲು ಮತ್ತೆ ಕ್ಲಿಕ್ ಮಾಡಿ';
+  setStatus('');
+  // Waveform is optional — don't block speech if getUserMedia fails (common on mobile HTTP)
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    startWaveform(micStream);
+  }catch(e){micStream=null;}
+  startRecognition();
+}
+
+function startRecognition(){
+  if(!isRecording) return;
+  recognition=new SR();
+  recognition.lang='kn-IN';recognition.continuous=true;
+  recognition.interimResults=true;recognition.maxAlternatives=1;
   recognition.onresult=(event)=>{
     let interim='';
     for(let i=event.resultIndex;i<event.results.length;i++){
       const r=event.results[i];
-      if(r.isFinal){ const t=r[0].transcript.trim(); if(t){ if(interimRow){interimRow.remove();interimRow=null;} appendLive(t); } }
+      if(r.isFinal){const t=r[0].transcript.trim();if(t){if(interimRow){interimRow.remove();interimRow=null;}appendLive(t);}}
       else interim+=r[0].transcript;
     }
     if(interim){
       const box=document.getElementById('liveTranscript');
-      if(!interimRow){ interimRow=document.createElement('div'); interimRow.className='transcript-row interim-row'; box.appendChild(interimRow); }
+      if(!interimRow){interimRow=document.createElement('div');interimRow.className='transcript-row interim-row';box.appendChild(interimRow);}
       interimRow.innerHTML='<span class="ts">'+fmtClock()+'</span><span class="chunk-text" style="color:var(--span-color);font-style:italic">'+interim+'</span>';
       box.scrollTop=box.scrollHeight;
     }
   };
-  recognition.onerror=(e)=>{ if(e.error==='no-speech'||e.error==='aborted') return; setStatus('ದೋಷ: '+e.error,true); };
-  recognition.onend=()=>{ if(isRecording) recognition.start(); };
-  recognition.start();
+  recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;setStatus('ದೋಷ: '+e.error,true);};
+  // Restart on end — use small delay to avoid rapid cycling on iOS Safari
+  recognition.onend=()=>{if(isRecording)setTimeout(()=>{if(isRecording)startRecognition();},300);};
+  try{recognition.start();}catch(e){/* already started */}
 }
-function stopRec() {
+
+function stopRec(){
   isRecording=false;
-  if(recognition){ recognition.abort(); recognition=null; }
-  if(micStream) micStream.getTracks().forEach(t=>t.stop());
-  if(interimRow){ interimRow.remove(); interimRow=null; }
+  if(recognition){try{recognition.abort();}catch(e){}recognition=null;}
+  if(micStream)micStream.getTracks().forEach(t=>t.stop());
+  if(interimRow){interimRow.remove();interimRow=null;}
   stopWaveform();
   document.getElementById('micBtn').classList.remove('recording');
   document.getElementById('micBtn').textContent='🎙️';
   document.getElementById('micStatus').textContent='ರೆಕಾರ್ಡ್ ಮಾಡಲು ಕ್ಲಿಕ್ ಮಾಡಿ';
   document.getElementById('micHint').textContent='ರೆಕಾರ್ಡಿಂಗ್ ನಿಲ್ಲಿಸಲಾಗಿದೆ';
 }
+
 </script>
 </body>
 </html>
