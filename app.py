@@ -354,6 +354,7 @@ let recognition=null,micStream=null,isRecording=false,interimRow=null;
 async function toggleRecording(){{isRecording?stopRec():startRec();}}
 async function startRec(){{
   if(!SR){{setLiveStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true);return;}}
+  if(/iPad|iPhone|iPod/.test(navigator.userAgent)){{setLiveStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);return;}}
   isRecording=true;appendSessionMarker();
   document.getElementById('micBtn').classList.add('recording');
   document.getElementById('micBtn').textContent='⏹️';
@@ -383,7 +384,7 @@ function startRecognition(){{
       box.scrollTop=box.scrollHeight;
     }}
   }};
-  recognition.onerror=(e)=>{{if(e.error==='no-speech'||e.error==='aborted')return;setLiveStatus('ದೋಷ: '+e.error,true);}};
+  recognition.onerror=(e)=>{{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='service-not-allowed'){{setLiveStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}}setLiveStatus('ದೋಷ: '+e.error,true);}};
   recognition.onend=()=>{{if(isRecording)setTimeout(()=>{{if(isRecording)startRecognition();}},300);}};
   try{{recognition.start();}}catch(e){{}}
 }}
