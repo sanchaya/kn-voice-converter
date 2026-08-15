@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """
 ದನಿ ಕನ್ನಡ — Kannada Speech-to-Text Server
-  Live mic recording  → chunked Whisper → streaming Kannada transcript
-  File upload         → full transcription
+  Live mic  → Web Speech API (browser-native, kn-IN, no server needed)
+  File upload → server-side Whisper transcription (mlx / api / local)
 
 Run:
-    python app.py
+    python app.py                        # CPU backend (slow)
+    python app.py --backend mlx          # Apple Silicon Metal GPU (recommended)
+    python app.py --backend api          # OpenAI cloud API (needs OPENAI_API_KEY)
     python app.py --port 8998 --model large-v3
 
 Endpoints:
-    GET  /              Web UI
-    POST /transcribe    Upload file → JSON
-    WS   /ws/transcribe Live mic chunks → streaming JSON
-    GET  /health
+    GET  /              Main UI (two-card layout: live + upload)
+    GET  /about         About page (Sanchaya mission, tech, community appeal)
+    POST /transcribe    Upload audio file → JSON {text, duration_seconds, ...}
+    GET  /health        {"status": "ok", "model_loaded": bool}
+
+Browser notes:
+    Live recording uses Web Speech API — works on Chrome and Safari (desktop/Android).
+    iOS Safari does not support Kannada (kn-IN) in Apple Dictation → service-not-allowed.
+    Firefox does not implement Web Speech API.
 """
 
 import argparse, base64, json, os, sys, tempfile, time, threading
