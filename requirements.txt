@@ -1,18 +1,36 @@
-# ದನಿ ಕನ್ನಡ — Python dependencies
+# ನುಡಿಯಕ್ಷರ — Python dependencies
 # Install: pip install -r requirements.txt
 
 # Web server
 flask>=3.0.0
 flask-sock>=0.7.0
 
-# ── RECOMMENDED: Apple Silicon (M1/M2/M3/M4) ────────────────────────────────
-# Uses Metal GPU/Neural Engine — fast, accurate, no CPU load
-mlx-whisper>=0.4.0
+# Audio conversion (required for server-mode live mic + AI4Bharat backends)
+# Also install ffmpeg system package: apt install ffmpeg  OR  brew install ffmpeg
+soundfile>=0.12.0
+librosa>=0.10.0
+requests>=2.31.0
 
-# ── ALTERNATIVE: OpenAI cloud API ───────────────────────────────────────────
+# ── AI4Bharat: IndicWav2Vec (CPU-friendly, ~1.2 GB) ─────────────────────────
+# pip install -r requirements-indicwav2vec.txt
+# transformers>=4.35.0
+# torch>=2.0.0
+
+# ── AI4Bharat: IndicConformer via NeMo (GPU recommended) ────────────────────
+# pip install 'nemo_toolkit[asr]'   (large install, ~3 GB)
+
+# ── Bhashini cloud API ───────────────────────────────────────────────────────
+# No extra packages — uses requests (already above)
+# Set env vars: BHASHINI_USER_ID, BHASHINI_API_KEY
+# Register free: https://bhashini.gov.in/ulca
+
+# ── Apple Silicon (M1/M2/M3/M4) — mlx-whisper ───────────────────────────────
+# mlx-whisper>=0.4.0
+
+# ── OpenAI cloud Whisper API ─────────────────────────────────────────────────
 # openai>=1.0.0
 
-# ── FALLBACK: Local CPU (slow, not recommended) ──────────────────────────────
+# ── Local CPU Whisper (slow) ─────────────────────────────────────────────────
 # openai-whisper>=20231117
 # torch>=2.0.0
 # numpy>=1.24.0

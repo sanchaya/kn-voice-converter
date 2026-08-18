@@ -1,0 +1,6 @@
+# Bhashini API backend dependencies (minimal — no GPU, no large models)
+# pip install -r requirements-bhashini.txt
+flask>=3.0.0
+flask-sock>=0.7.0
+requests>=2.31.0
+# ffmpeg must be installed separately: apt install ffmpeg

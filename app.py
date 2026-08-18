@@ -1,30 +1,41 @@
 #!/usr/bin/env python3
 """
 ನುಡಿಯಕ್ಷರ — Kannada Speech-to-Text Server
-  Live mic  → Web Speech API (browser-native, kn-IN, no server needed)
-  File upload → server-side Whisper transcription (mlx / api / local)
+
+Live mic modes:
+  Web Speech API   → browser-native, kn-IN, no server needed (desktop Chrome/Safari)
+  Server ASR       → mic audio sent to server every 5s, transcribed by selected backend
+
+File upload → server-side transcription via selected backend
+
+Backends:
+  --backend bhashini       Free Bhashini/ULCA cloud API (needs BHASHINI_USER_ID + BHASHINI_API_KEY)
+  --backend indicwav2vec   AI4Bharat IndicWav2Vec local model (~1.2 GB, CPU OK)
+  --backend indicconformer AI4Bharat IndicConformer via NeMo (GPU recommended)
+  --backend mlx            mlx-whisper, Apple Silicon Metal GPU
+  --backend api            OpenAI Whisper API (needs OPENAI_API_KEY)
+  --backend local          openai-whisper on CPU (slow)
 
 Run:
-    python app.py                        # CPU backend (slow)
-    python app.py --backend mlx          # Apple Silicon Metal GPU (recommended)
-    python app.py --backend api          # OpenAI cloud API (needs OPENAI_API_KEY)
-    python app.py --port 8998 --model large-v3
+    python app.py --backend bhashini
+    python app.py --backend indicwav2vec
+    python app.py --backend mlx --model large-v3
+    python app.py --port 8998
 
 Endpoints:
-    GET  /              Main UI (two-card layout: live + upload)
-    GET  /about         About page (Sanchaya mission, tech, community appeal)
+    GET  /              Main UI
+    GET  /about         About page
+    GET  /backend-info  Active backend info → JSON
     POST /transcribe    Upload audio file → JSON {text, duration_seconds, ...}
     GET  /health        {"status": "ok", "model_loaded": bool}
-
-Browser notes:
-    Live recording uses Web Speech API — works on Chrome and Safari (desktop/Android).
-    iOS Safari does not support Kannada (kn-IN) in Apple Dictation → service-not-allowed.
-    Firefox does not implement Web Speech API.
 """
 
 import argparse, base64, json, os, sys, tempfile, time, threading
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
+from backends import bhashini as _bhashini
+from backends import indicwav2vec as _indicwav2vec
+from backends import indicconformer as _indicconformer
 
 try:
     from flask_sock import Sock
@@ -53,7 +64,16 @@ KANNADA_PROMPT = "ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಮಾತನಾಡ
 
 def do_transcribe(audio_path: str) -> tuple[str, float]:
     """Transcribe audio file. Returns (text, duration_seconds)."""
-    if BACKEND == "mlx":
+    if BACKEND == "bhashini":
+        return _bhashini.transcribe(audio_path)
+
+    elif BACKEND == "indicwav2vec":
+        return _indicwav2vec.transcribe(audio_path)
+
+    elif BACKEND == "indicconformer":
+        return _indicconformer.transcribe(audio_path)
+
+    elif BACKEND == "mlx":
         import mlx_whisper
         with model_lock:   # prevent concurrent Metal GPU access
             result = mlx_whisper.transcribe(
@@ -146,6 +166,14 @@ def build_html():
     .center-nav {{ display: flex; flex-direction: column; align-items: center; gap: 4px; }}
     .nav-logo    {{ height: 40px; width: auto; display: block; }}
     .nav-brand {{ font-size: 17px; font-weight: 700; color: var(--text-color1); letter-spacing: .02em; }}
+    .mode-toggle {{ display:flex; gap:8px; margin-bottom:20px; }}
+    .mode-btn {{ flex:1; padding:8px 12px; border-radius:8px; border:2px solid var(--border);
+                 font-size:13px; font-weight:600; cursor:pointer; background:var(--bg-color);
+                 color:var(--span-color); transition:.2s; }}
+    .mode-btn.active {{ border-color:var(--primary); background:var(--primary); color:#fff; }}
+    .backend-pill {{ display:inline-flex; align-items:center; gap:6px; font-size:11px;
+                     background:#eef0ff; color:var(--primary); border-radius:20px;
+                     padding:3px 10px; font-weight:600; margin-bottom:16px; }}
     .nav-tagline {{ font-size: 13px; color: var(--span-color); letter-spacing: .04em; }}
     .nav-right   {{
       position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
@@ -503,6 +531,23 @@ def health():
     return jsonify({"status": "ok", "model_loaded": model is not None})
 
 
+@app.route("/backend-info")
+def backend_info():
+    labels = {
+        "bhashini":       "Bhashini API (AI4Bharat cloud)",
+        "indicwav2vec":   "IndicWav2Vec (local CPU)",
+        "indicconformer": "IndicConformer (local NeMo)",
+        "mlx":            "mlx-whisper (Apple Silicon)",
+        "api":            "OpenAI Whisper API",
+        "local":          "Whisper CPU (local)",
+    }
+    return jsonify({
+        "backend": BACKEND,
+        "label": labels.get(BACKEND, BACKEND),
+        "server_asr": True,   # tells browser server-mode is available
+    })
+
+
 @app.route("/about")
 def about():
     here = Path(__file__).parent
@@ -606,6 +651,11 @@ def main():
              "Can also be set via OPENAI_API_KEY env var.",
     )
     parser.add_argument(
+        "--backend", default=None,
+        choices=["bhashini", "indicwav2vec", "indicconformer", "mlx", "api", "local"],
+        help="Transcription backend (default: auto-detect mlx → api → local)",
+    )
+    parser.add_argument(
         "--mlx", action="store_true", default=True,
         help="Use mlx-whisper (Apple Silicon Metal GPU). Default on M-series Macs.",
     )
@@ -621,6 +671,28 @@ def main():
 
     # ── Choose backend ────────────────────────────────────────────────────────
     global BACKEND, api_client, model, mlx_model_repo
+
+    # Explicit --backend flag takes highest priority
+    if args.backend in ("bhashini", "indicwav2vec", "indicconformer"):
+        BACKEND = args.backend
+        print(f"✓ Backend: {BACKEND}")
+        if BACKEND == "bhashini":
+            uid = os.environ.get("BHASHINI_USER_ID", "")
+            key = os.environ.get("BHASHINI_API_KEY", "")
+            if not uid or not key:
+                print("  ⚠️  Set BHASHINI_USER_ID and BHASHINI_API_KEY env vars")
+                print("     Register free at https://bhashini.gov.in/ulca")
+        elif BACKEND == "indicwav2vec":
+            print("  Model will download on first request (~1.2 GB)")
+        elif BACKEND == "indicconformer":
+            print("  Model will download on first request — install nemo_toolkit[asr] first")
+        print(f"\nReady → http://localhost:{args.port}\n")
+        app.run(host=args.host, port=args.port, debug=False, threaded=True)
+        return
+    elif args.backend == "api":
+        args.mlx = False
+    elif args.backend == "local":
+        args.mlx = False
 
     # Priority: mlx > api-key > local
     if args.mlx:
