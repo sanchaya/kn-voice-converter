@@ -347,6 +347,10 @@ function setStatus(msg,isErr) {
   const el=document.getElementById('statusBar');
   el.innerHTML=msg?(isErr?'<span class="err">'+msg+'</span>':msg):'';
 }
+function setLiveStatus(msg) {
+  const el=document.getElementById('micStatus');
+  if(el) el.textContent=msg;
+}
 function appendSessionMarker() {
   const box=document.getElementById('liveTranscript');
   if(!box.innerHTML.trim()) return;
@@ -395,11 +399,17 @@ async function startRec(){
   }catch(e){micStream=null;}
 }
 
+const isAndroid=/Android/i.test(navigator.userAgent);
+
 function startRecognition(){
   if(!isRecording) return;
   recognition=new SR();
-  recognition.lang='kn-IN';recognition.continuous=true;
-  recognition.interimResults=true;recognition.maxAlternatives=1;
+  recognition.lang='kn-IN';
+  // Android Chrome: continuous+interimResults unreliable — disable both, restart manually
+  recognition.continuous=!isAndroid;
+  recognition.interimResults=!isAndroid;
+  recognition.maxAlternatives=1;
+  recognition.onstart=()=>{ setLiveStatus('🎙️ ಕೇಳುತ್ತಿದ್ದೇನೆ…'); };
   recognition.onresult=(event)=>{
     let interim='';
     for(let i=event.resultIndex;i<event.results.length;i++){
@@ -417,18 +427,22 @@ function startRecognition(){
       box.scrollTop=box.scrollHeight;
     }
   };
-  recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='service-not-allowed'){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}setStatus('ದೋಷ: '+e.error,true);};
-  // Restart on end — use small delay to avoid rapid cycling on iOS Safari
+  recognition.onerror=(e)=>{
+    if(e.error==='aborted')return;
+    if(e.error==='no-speech'){setLiveStatus('ಮಾತನಾಡಿ… ಶಬ್ದ ಕೇಳಿಸಲಿಲ್ಲ');return;}
+    if(e.error==='service-not-allowed'){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}
+    if(e.error==='network'){setLiveStatus('ನೆಟ್‌ವರ್ಕ್ ದೋಷ — Google ಭಾಷಣ ಸರ್ವರ್ ತಲುಪಲಾಗಲಿಲ್ಲ');return;}
+    setStatus('ದೋಷ: '+e.error,true);
+  };
   recognition.onend=()=>{
-    // Android Chrome often ends without firing isFinal — promote pending interim to final
     if(lastInterimText.trim()){
       if(interimRow){interimRow.remove();interimRow=null;}
       appendLive(lastInterimText.trim());
       lastInterimText='';
     }
-    if(isRecording)setTimeout(()=>{if(isRecording)startRecognition();},300);
+    if(isRecording){setLiveStatus('ಮರು ಆರಂಭಿಸುತ್ತಿದ್ದೇನೆ…');setTimeout(()=>{if(isRecording)startRecognition();},300);}
   };
-  try{recognition.start();}catch(e){/* already started */}
+  try{recognition.start();}catch(e){setLiveStatus('ದೋಷ: '+e.message);}
 }
 
 function stopRec(){
