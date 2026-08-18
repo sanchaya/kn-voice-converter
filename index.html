@@ -385,6 +385,7 @@ async function startRec(){
   if(!SR){setStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true);return;}
   if(/iPad|iPhone|iPod/.test(navigator.userAgent)){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);return;}
   isRecording=true;
+  noSpeechStreak=0;
   appendSessionMarker();
   document.getElementById('micBtn').classList.add('recording');
   document.getElementById('micBtn').textContent='⏹️';
@@ -400,17 +401,19 @@ async function startRec(){
 }
 
 const isAndroid=/Android/i.test(navigator.userAgent);
+let noSpeechStreak=0;
 
 function startRecognition(){
   if(!isRecording) return;
   recognition=new SR();
   recognition.lang='kn-IN';
-  // Android Chrome: continuous+interimResults unreliable — disable both, restart manually
+  // Android Chrome: continuous+interimResults unreliable — disable, restart manually
   recognition.continuous=!isAndroid;
   recognition.interimResults=!isAndroid;
   recognition.maxAlternatives=1;
-  recognition.onstart=()=>{ setLiveStatus('🎙️ ಕೇಳುತ್ತಿದ್ದೇನೆ…'); };
+  recognition.onstart=()=>{ setLiveStatus('🎙️ ಕೇಳುತ್ತಿದ್ದೇನೆ… ಮಾತನಾಡಿ'); };
   recognition.onresult=(event)=>{
+    noSpeechStreak=0; // reset on any result
     let interim='';
     for(let i=event.resultIndex;i<event.results.length;i++){
       const r=event.results[i];
@@ -429,9 +432,19 @@ function startRecognition(){
   };
   recognition.onerror=(e)=>{
     if(e.error==='aborted')return;
-    if(e.error==='no-speech'){setLiveStatus('ಮಾತನಾಡಿ… ಶಬ್ದ ಕೇಳಿಸಲಿಲ್ಲ');return;}
+    if(e.error==='no-speech'){
+      noSpeechStreak++;
+      if(noSpeechStreak>=4){
+        // Stop looping — ask user to tap mic again
+        stopRec();
+        setStatus('ಧ್ವನಿ ಕೇಳಿಸಲಿಲ್ಲ. ಮೈಕ್ ಬಟನ್ ಒತ್ತಿ ಮತ್ತೆ ಮಾತನಾಡಿ.',true);
+        return;
+      }
+      setLiveStatus('ಶಬ್ದ ಕೇಳಿಸಲಿಲ್ಲ… ಮಾತನಾಡಿ ('+noSpeechStreak+'/4)');
+      return;
+    }
     if(e.error==='service-not-allowed'){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}
-    if(e.error==='network'){setLiveStatus('ನೆಟ್‌ವರ್ಕ್ ದೋಷ — Google ಭಾಷಣ ಸರ್ವರ್ ತಲುಪಲಾಗಲಿಲ್ಲ');return;}
+    if(e.error==='network'){setLiveStatus('ನೆಟ್‌ವರ್ಕ್ ದೋಷ — ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ');return;}
     setStatus('ದೋಷ: '+e.error,true);
   };
   recognition.onend=()=>{
@@ -440,7 +453,10 @@ function startRecognition(){
       appendLive(lastInterimText.trim());
       lastInterimText='';
     }
-    if(isRecording){setLiveStatus('ಮರು ಆರಂಭಿಸುತ್ತಿದ್ದೇನೆ…');setTimeout(()=>{if(isRecording)startRecognition();},300);}
+    if(isRecording && noSpeechStreak<4){
+      const delay=noSpeechStreak>0?800:300;
+      setTimeout(()=>{if(isRecording)startRecognition();},delay);
+    }
   };
   try{recognition.start();}catch(e){setLiveStatus('ದೋಷ: '+e.message);}
 }
