@@ -373,7 +373,7 @@ function copyLive() {
 function clearLive(){document.getElementById('liveTranscript').innerHTML='';setStatus('');}
 
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,micStream=null,isRecording=false,interimRow=null;
+let recognition=null,micStream=null,isRecording=false,interimRow=null,lastInterimText="";
 
 async function toggleRecording(){isRecording?stopRec():startRec();}
 
@@ -404,9 +404,12 @@ function startRecognition(){
     let interim='';
     for(let i=event.resultIndex;i<event.results.length;i++){
       const r=event.results[i];
-      if(r.isFinal){const t=r[0].transcript.trim();if(t){if(interimRow){interimRow.remove();interimRow=null;}appendLive(t);}}
-      else interim+=r[0].transcript;
+      if(r.isFinal){
+        const t=r[0].transcript.trim();
+        if(t){if(interimRow){interimRow.remove();interimRow=null;}appendLive(t);lastInterimText='';}
+      } else { interim+=r[0].transcript; }
     }
+    lastInterimText=interim;
     if(interim){
       const box=document.getElementById('liveTranscript');
       if(!interimRow){interimRow=document.createElement('div');interimRow.className='transcript-row interim-row';box.appendChild(interimRow);}
@@ -416,7 +419,15 @@ function startRecognition(){
   };
   recognition.onerror=(e)=>{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='service-not-allowed'){setStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}setStatus('ದೋಷ: '+e.error,true);};
   // Restart on end — use small delay to avoid rapid cycling on iOS Safari
-  recognition.onend=()=>{if(isRecording)setTimeout(()=>{if(isRecording)startRecognition();},300);};
+  recognition.onend=()=>{
+    // Android Chrome often ends without firing isFinal — promote pending interim to final
+    if(lastInterimText.trim()){
+      if(interimRow){interimRow.remove();interimRow=null;}
+      appendLive(lastInterimText.trim());
+      lastInterimText='';
+    }
+    if(isRecording)setTimeout(()=>{if(isRecording)startRecognition();},300);
+  };
   try{recognition.start();}catch(e){/* already started */}
 }
 
