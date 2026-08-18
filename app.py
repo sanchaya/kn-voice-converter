@@ -359,7 +359,7 @@ function drawWave(){{
   wfCtx.stroke();
 }}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,micStream=null,isRecording=false,interimRow=null;
+let recognition=null,micStream=null,isRecording=false,interimRow=null,lastInterimText="";
 async function toggleRecording(){{isRecording?stopRec():startRec();}}
 async function startRec(){{
   if(!SR){{setLiveStatus('Chrome ಅಥವಾ Safari ಬಳಸಿ — Firefox ಬೆಂಬಲಿಸುವುದಿಲ್ಲ',true);return;}}
@@ -383,9 +383,12 @@ function startRecognition(){{
     let interim='';
     for(let i=event.resultIndex;i<event.results.length;i++){{
       const r=event.results[i];
-      if(r.isFinal){{const t=r[0].transcript.trim();if(t){{if(interimRow){{interimRow.remove();interimRow=null;}}appendLive(t);}}}}
-      else interim+=r[0].transcript;
+      if(r.isFinal){{
+        const t=r[0].transcript.trim();
+        if(t){{if(interimRow){{interimRow.remove();interimRow=null;}}appendLive(t);lastInterimText='';}}
+      }} else {{ interim+=r[0].transcript; }}
     }}
+    lastInterimText=interim;
     if(interim){{
       const box=document.getElementById('liveTranscript');
       if(!interimRow){{interimRow=document.createElement('div');interimRow.className='transcript-row interim-row';box.appendChild(interimRow);}}
@@ -394,7 +397,14 @@ function startRecognition(){{
     }}
   }};
   recognition.onerror=(e)=>{{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='service-not-allowed'){{setLiveStatus('iOS Safari ಕನ್ನಡ ಧ್ವನಿ ಗುರುತಿಸುವಿಕೆಯನ್ನು ಬೆಂಬಲಿಸುವುದಿಲ್ಲ — Android Chrome ಬಳಸಿ.',true);stopRec();return;}}setLiveStatus('ದೋಷ: '+e.error,true);}};
-  recognition.onend=()=>{{if(isRecording)setTimeout(()=>{{if(isRecording)startRecognition();}},300);}};
+  recognition.onend=()=>{{
+    if(lastInterimText.trim()){{
+      if(interimRow){{interimRow.remove();interimRow=null;}}
+      appendLive(lastInterimText.trim());
+      lastInterimText='';
+    }}
+    if(isRecording)setTimeout(()=>{{if(isRecording)startRecognition();}},300);
+  }};
   try{{recognition.start();}}catch(e){{}}
 }}
 function stopRec(){{
