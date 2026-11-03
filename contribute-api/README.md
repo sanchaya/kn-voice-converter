@@ -4,9 +4,11 @@ Backend for `/contribute/` (Kannada voice collection). Runs at `dani-api.sanchay
 All data stays on Sanchaya's server: SQLite plus WAV files in `DATA_DIR`. No third-party services.
 
 ## Deploy on Coolify
-1. New resource, Dockerfile build, base directory `contribute-api`, port 8000, domain `dani-api.sanchaya.net`.
-2. Add a persistent volume mounted at `/data` (audio and the database live there). Back it up off-server.
-3. Env: `ALLOWED_ORIGIN=https://dani.sanchaya.net` (default).
+1. DNS: A record `dani-api` pointing at the server.
+2. New resource, public repository `sanchaya/kn-voice-converter`, branch `main`, build pack **Docker Compose**, base directory `/contribute-api`, compose file `docker-compose.yaml`.
+3. In the resource, set the domain for the `api` service to `https://dani-api.sanchaya.net:8000` (the port after the domain tells Coolify where to route).
+4. Deploy. The volume, port and environment come from the compose file; keep one replica (SQLite is single-writer).
+5. Check `https://dani-api.sanchaya.net/health`. Back up the `kn-contribute-data` volume off-server.
 
 ## Run locally
     pip install -r requirements.txt
