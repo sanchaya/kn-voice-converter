@@ -292,6 +292,7 @@ def build_html():
   </div>
   <div class="nav-right">
     <a class="nav-link" href="/about">ನಮ್ಮ ಬಗ್ಗೆ</a>
+    <a class="nav-link" href="https://dani.sanchaya.net/contribute/" target="_blank">ಧ್ವನಿ ನೀಡಿ</a>
     <a class="nav-link" href="https://sanchaya.org/support-us/" target="_blank">ಬೆಂಬಲಿಸಿ</a>
     <a class="nav-link" href="https://sanchaya.org" target="_blank">ಸಂಚಯ</a>
     <a class="nav-link" href="https://sanchifoundation.org" target="_blank">ಸಂಚಿ ಫೌಂಡೇಶನ್</a>
