@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="kn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ಧ್ವನಿ ನೀಡಿ · Contribute your voice</title>
+<!-- No external scripts, fonts or analytics: all data stays under Sanchaya. -->
+<style>
+  :root { --bg:#fbfaf7; --fg:#1c1b18; --mute:#6b675e; --line:#ddd8cc; --acc:#8a2a1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1b18; --fg:#f1eee6; --mute:#a39e90; --line:#3a372f; --acc:#e0826f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.5 system-ui, "Noto Sans Kannada", sans-serif; }
+  main { max-width:620px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .mute { color:var(--mute); font-size:.9rem; }
+  .draft { border:1px solid var(--acc); color:var(--acc); padding:8px 12px; border-radius:8px; font-size:.85rem; margin:12px 0; }
+  section[hidden] { display:none; }
+  .tabs { display:flex; gap:8px; margin:16px 0; }
+  button, .tab { font:inherit; padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:transparent; color:var(--fg); cursor:pointer; }
+  button.primary, .tab.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button:disabled { opacity:.4; cursor:default; }
+  .prompt { font-size:1.35rem; padding:18px; border:1px solid var(--line); border-radius:12px; margin:12px 0; min-height:4.5em; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  input[type=text], select { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); width:100%; }
+  label { display:block; margin:10px 0; }
+  #msg { min-height:1.5em; margin-top:8px; }
+  .err { color:var(--acc); }
+  .meter { height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .meter div { height:100%; width:0; background:var(--acc); }
+</style>
+</head>
+<body>
+<main>
+  <h1>ಧ್ವನಿ ನೀಡಿ · Contribute your voice</h1>
+  <div class="mute">Help build an open Kannada speech-to-text model. Run by Sanchaya and Sanchi Foundation.</div>
+
+  <section id="consent">
+    <div class="draft">Draft consent text. It must be reviewed by a lawyer and a Kannada speaker before any public launch.</div>
+    <p>Your recordings, and the text you type or validate, will be stored on Sanchaya's own servers. They will be released publicly under the <b>CC0 1.0</b> licence (no rights reserved) and used to train speech models. A voice can identify a person. Once a clip is in a published release it cannot be recalled; until then you can delete everything you gave, using the link at the bottom of this page.</p>
+    <p lang="kn">ನನ್ನ ಧ್ವನಿ ಮುದ್ರಣಗಳನ್ನು CC0 ಪರವಾನಗಿಯಡಿ ಸಾರ್ವಜನಿಕವಾಗಿ ಬಿಡುಗಡೆ ಮಾಡಲು ಮತ್ತು ಧ್ವನಿ ಗುರುತಿಸುವ ಮಾದರಿಗಳನ್ನು ತರಬೇತಿಗೊಳಿಸಲು ಬಳಸಲು ನಾನು ಒಪ್ಪುತ್ತೇನೆ.</p>
+    <p>Please do not say your name, phone number, address or anyone else's personal details.</p>
+    <label><input type="checkbox" id="adult"> I am 18 or older. / ನನಗೆ 18 ವರ್ಷ ಅಥವಾ ಹೆಚ್ಚು ವಯಸ್ಸು.</label>
+    <label><input type="checkbox" id="agree"> I agree. / ನಾನು ಒಪ್ಪುತ್ತೇನೆ.</label>
+    <button class="primary" id="join" disabled>Continue / ಮುಂದುವರಿಸಿ</button>
+  </section>
+
+  <section id="app" hidden>
+    <div class="tabs">
+      <button class="tab on" id="tab-speak">ಮಾತನಾಡಿ · Speak</button>
+      <button class="tab" id="tab-check">ಕೇಳಿ · Validate</button>
+    </div>
+
+    <div id="speak">
+      <div class="prompt" id="prompt" lang="kn">…</div>
+      <div class="meter"><div id="level"></div></div>
+      <div class="row">
+        <button class="primary" id="rec">ರೆಕಾರ್ಡ್ ಮಾಡಿ · Record</button>
+        <button id="skip">Skip</button>
+      </div>
+      <audio id="preview" controls hidden></audio>
+      <div class="row" id="sendrow" hidden>
+        <button class="primary" id="send">ಕಳುಹಿಸಿ · Send</button>
+        <button id="redo">Record again</button>
+      </div>
+      <details><summary class="mute">Optional: where are you from?</summary>
+        <label>District <input type="text" id="district" maxlength="80"></label>
+        <label>Dialect or region <input type="text" id="dialect" maxlength="80"></label>
+      </details>
+    </div>
+
+    <div id="check" hidden>
+      <div class="prompt" id="vtext" lang="kn">…</div>
+      <audio id="vaudio" controls></audio>
+      <p class="mute">Does the audio say exactly this text?</p>
+      <div class="row">
+        <button class="primary" data-vote="correct">ಸರಿ · Correct</button>
+        <button data-vote="wrong">ತಪ್ಪು · Wrong</button>
+        <button data-vote="unusable">ಬಳಸಲಾಗದು · Unusable</button>
+      </div>
+    </div>
+
+    <p class="mute" id="stats"></p>
+    <p class="mute"><a href="#" id="forget">Delete everything I contributed</a></p>
+  </section>
+    <div id="msg" class="mute"></div>
+</main>
+<script src="wav.js"></script>
+<script src="contribute.js"></script>
+</body>
+</html>
