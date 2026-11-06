@@ -6,7 +6,8 @@ services:
       - "8000"   # no host port: Coolify's proxy routes the domain to this port
     environment:
       - ALLOWED_ORIGIN=https://dani.sanchaya.net
+      - DATA_DIR=/data
     volumes:
       - kn-contribute-data:/data   # audio and the SQLite database; survives redeploys
 volumes:
-  kn-contribute-data:
+  kn-contribute-data:   # named volume: Coolify keeps it across redeploys; back it up off-server
